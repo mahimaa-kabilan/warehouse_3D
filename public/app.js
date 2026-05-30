@@ -1145,6 +1145,31 @@ document.getElementById("addBtn").addEventListener("click", async () => {
     }
 });
 
+
+// CLEAR ALL PACKAGES HANDLER
+document.getElementById("clearAllBtn").addEventListener("click", async () => {
+    if (!confirm("Are you sure you want to clear all packages from the warehouse? This action cannot be undone.")) {
+        return;
+    }
+
+    try {
+        const response = await fetch("/clear-all", {
+            method: "POST"
+        });
+
+        if (!response.ok) throw new Error("Failed to clear warehouse");
+
+        showToast("All warehouse packages cleared!");
+        
+        // Reload package visuals
+        isInitialLoad = true;
+        loadPackages();
+    } catch (err) {
+        showToast(err.message || "Failed to clear database", "error");
+        console.error(err);
+    }
+});
+
 // TOAST NOTIFICATIONS
 let toastTimer = null;
 function showToast(message, type = "success") {

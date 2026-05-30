@@ -1,5 +1,5 @@
 const express = require("express");
-const mysql = require("mysql2");
+// mysql2 removed
 
 const app = express();
 
@@ -8,39 +8,61 @@ app.use(express.json());
 app.use(express.static("public"));
 
 
-// MYSQL
-const db = mysql.createConnection({
-    host: "localhost",
-    user: "root",
-    password: "worms",
-    database: "warehouse"
-});
-
-
-db.connect((err) => {
-
+// SQLITE
+const sqlite3 = require("sqlite3").verbose();
+const db = new sqlite3.Database("./warehouse.db", (err) => {
     if (err) {
-        console.log(err);
+        console.error("Error opening database:", err.message);
+    } else {
+        console.log("SQLite Connected");
+        db.run(`
+            CREATE TABLE IF NOT EXISTS packages (
+                package_identifier TEXT PRIMARY KEY,
+                lifespan INTEGER NOT NULL,
+                slot_index INTEGER NOT NULL UNIQUE
+            )
+        `, (err) => {
+            if (err) {
+                console.error("Error creating table:", err.message);
+            } else {
+                console.log("Packages table initialized successfully.");
+            }
+        });
     }
-    else {
-        console.log("MySQL Connected");
-    }
-
 });
 
 
 // GET ALL PACKAGES
 app.get("/packages", (req, res) => {
 
-    const sql = "SELECT * FROM packages";
+    const sql = "SELECT * FROM packages ORDER BY slot_index ASC";
 
-    db.query(sql, (err, result) => {
+    db.all(sql, [], (err, rows) => {
 
         if (err) {
             res.status(500).send(err);
         }
         else {
-            res.json(result);
+            res.json(rows);
+        }
+
+    });
+
+});
+
+
+// CLEAR ALL PACKAGES
+app.post("/clear-all", (req, res) => {
+
+    const sql = "DELETE FROM packages";
+
+    db.run(sql, [], (err) => {
+
+        if (err) {
+            res.status(500).send(err);
+        }
+        else {
+            res.send("All packages cleared");
         }
 
     });
@@ -59,7 +81,7 @@ app.post("/add-package", (req, res) => {
 
     const getSlots = "SELECT slot_index FROM packages";
 
-    db.query(getSlots, (err, results) => {
+    db.all(getSlots, [], (err, results) => {
 
         if (err) {
             return res.status(500).send(err);
@@ -83,8 +105,10 @@ app.post("/add-package", (req, res) => {
         }
 
         let completed = 0;
+        let hasError = false;
 
         packages.forEach((pkg, index) => {
+            if (hasError) return;
 
             const sql = `
                 INSERT INTO packages
@@ -92,7 +116,7 @@ app.post("/add-package", (req, res) => {
                 VALUES (?, ?, ?)
             `;
 
-            db.query(
+            db.run(
                 sql,
                 [
                     pkg.package_identifier,
@@ -102,6 +126,7 @@ app.post("/add-package", (req, res) => {
                 (err) => {
 
                     if (err) {
+                        hasError = true;
                         return res.status(500).send(err);
                     }
 
@@ -131,7 +156,7 @@ app.delete("/dispatch/:id", (req, res) => {
         WHERE package_identifier = ?
     `;
 
-    db.query(sql, [id], (err) => {
+    db.run(sql, [id], (err) => {
 
         if (err) {
             res.status(500).send(err);
